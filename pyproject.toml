@@ -1,0 +1,195 @@
+[project]
+name = "[package_name]"
+version = "0.0.1"
+description = "[description]"
+requires-python = ">=3.12,<3.13"
+authors = [{ name = "shern" }]
+keywords = []
+dependencies = ["pydantic-settings>=2.11.0", "ss-utils-logging>=0.0.9"]
+
+
+# [build-system]
+# requires = ["hatchling"]
+# build-backend = "hatchling.build"
+
+# [tool.hatch.build]
+# sources = ["src"]
+
+# [project.scripts]
+# [package_name] = "[package_name].cli:app"
+
+
+[tool.pytest.ini_options]
+# Test discovery
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+pythonpath = ["src"]
+
+# Execution options
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--asyncio-mode=auto",
+    "--cov=.",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+]
+
+# Async test configuration
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+# Test markers
+markers = [
+    "unit: marks tests as unit tests (fast tests using mocks)",
+    "integration: marks tests as integration tests (real API calls)",
+    "e2e: marks tests as end-to-end workflow tests",
+    "experimental: marks tests as experimental/WIP tests",
+    "slow: marks tests as slow running (deselect with '-m \"not slow\"')",
+    "asyncio: marks tests as async tests",
+]
+
+# Warning filters
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "logs/*",
+    "examples/*",
+    "*/migrations/*",
+    "*/__pycache__/*",
+    "*.egg-info/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+
+[tool.ruff]
+line-length = 120
+fix = true
+unsafe-fixes = false
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = [
+    "F",  # default Ruff rules
+    "E",  # pycodestyle Errors
+    "W",  # pycodestyle Warnings
+    "I",  # import sorting
+    "UP", # modern syntax updates
+    "B",  # flake8 common pitfalls & best practices
+    "Q",  # flake8 consistent quotes
+    "N",  # naming conventions,
+]
+ignore = [
+    "F401", # Unused import
+    "E501", # line too long
+    "B008", # function call in argument defaults
+    "D400", # first line in docstring should end with period
+    # "D413", # missing blank line after last section
+    # "W293", # blank line contains whitespace
+    # "W291", # trailing whitespace
+
+]
+
+fixable = ["ALL"]
+
+extend-select = [
+    "PLR2004", # magic value used in comparison
+    "D101",    # missing docstring in public class
+    "D102",    # missing docstring in public method
+    "D103",    # missing docstring in public function
+    "D201",    # no blank lines before function docstring
+    "D202",    # no blank lines after function docstring
+    "D215",    # section underline is over-indented
+    "T201",    # 'print' found (should use logging)
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-wrap-aliases = true
+
+[tool.ruff.lint.per-file-ignores]
+# Allow print statements in tests, examples, and notebooks
+"tests/**/*.py" = ["T201", "PLR2004"]
+"examples/**/*.py" = ["T201"]
+"notebooks/**/*.ipynb" = ["T201", "F401"]
+
+[tool.ruff.lint.pep8-naming]
+classmethod-decorators = ["classmethod", "pydantic.field_validator"]
+
+[tool.mypy]
+disallow_any_generics = true
+disallow_untyped_defs = true
+disallow_untyped_calls = true
+warn_unused_configs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+strict = false
+warn_return_any = true
+plugins = ['pydantic.mypy']
+packages = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["opentelemetry.*"]
+ignore_missing_imports = true
+
+# [tool.uv]
+# find-links = ["../ds_utils/dist"]
+
+[dependency-groups]
+dev = [
+    # Terminal formatting
+    "rich>=14.0.0",
+    # Testing
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    # Code quality
+    "ruff>=0.9.2",
+    "mypy>=1.0.0",
+    # Documentation
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.0.0",
+    # Jupyter kernel
+    "ipykernel>=6.30.1",
+    # "utils-abc",
+]
+# [tool.uv.sources]
+# utils-abc = { path = "[relative_path]/src/utils_abc", editable = true }
