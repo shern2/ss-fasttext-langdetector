@@ -596,10 +596,11 @@ wheels = [
 
 [[package]]
 name = "ss-fasttext-langdetector"
-version = "0.0.1"
+version = "0.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "fasttext" },
+    { name = "platformdirs" },
 ]
 
 [package.dev-dependencies]
@@ -615,7 +616,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "fasttext", git = "https://github.com/facebookresearch/fastText?rev=1142dc4c4ecbc19cc16eee5cdd28472e689267e6" }]
+requires-dist = [
+    { name = "fasttext", git = "https://github.com/facebookresearch/fastText?rev=1142dc4c4ecbc19cc16eee5cdd28472e689267e6" },
+    { name = "platformdirs", specifier = ">=4.3.6" },
+]
 
 [package.metadata.requires-dev]
 dev = [
