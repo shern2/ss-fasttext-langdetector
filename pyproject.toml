@@ -1,6 +1,6 @@
 [project]
 name = "ss-fasttext-langdetector"
-version = "0.0.2"
+version = "0.0.3"
 description = "FastText Language Detector"
 requires-python = ">=3.12,<3.13"
 authors = [{ name = "shern" }]
@@ -8,6 +8,7 @@ keywords = ["fasttext", "language", "detector"]
 dependencies = [
     "fasttext==0.9.3",
     "platformdirs>=4.3.6",
+    "tenacity>=9.1.2",
 ]
 readme = "README.md"
 license = { text = "MIT" }

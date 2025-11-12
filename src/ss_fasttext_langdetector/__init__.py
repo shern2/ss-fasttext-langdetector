@@ -7,10 +7,18 @@ import hashlib
 import logging
 import re
 from pathlib import Path
+from urllib.error import ContentTooShortError, HTTPError, URLError
 from urllib.request import urlretrieve
 
 import fasttext
 from platformdirs import user_cache_dir
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 logger = logging.getLogger(__name__)
 fasttext.FastText.eprint = lambda x: None  # Suppress FastText warnings
@@ -28,6 +36,18 @@ def _verify_file_hash(file_path: Path, expected_hash: str) -> bool:
         while chunk := f.read(8192):
             sha256.update(chunk)
     return sha256.hexdigest() == expected_hash
+
+
+@retry(
+    retry=retry_if_exception_type((URLError, HTTPError, ContentTooShortError)),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
+def _download_model(url: str, file_path: Path) -> None:
+    """Download model file with retries."""
+    urlretrieve(url, file_path)
 
 
 class LangDetector:
@@ -56,7 +76,7 @@ class LangDetector:
             if not pth_local.exists():
                 logger.info("Downloading model from %s", MODEL_URL)
                 try:
-                    urlretrieve(MODEL_URL, pth_local)
+                    _download_model(MODEL_URL, pth_local)
                     if not _verify_file_hash(pth_local, MODEL_SHA256):
                         pth_local.unlink()  # Remove corrupted file
                         raise ValueError("Downloaded model failed integrity verification")
