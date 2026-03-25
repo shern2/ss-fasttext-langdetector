@@ -76,11 +76,13 @@ class CustomBuildHook(BuildHookInterface):
             )
 
             # Vendor the fasttext Python wrapper sources
-            ft_py_src = ft_dir / "python" / "fasttext"
+            # The repo layout at this rev: python/fasttext_module/fasttext/
+            ft_py_src = ft_dir / "python" / "fasttext_module" / "fasttext"
             shutil.copytree(ft_py_src, VENDOR_DIR / "fasttext", dirs_exist_ok=True)
 
             # Vendor the compiled pybind extension
-            so_files = list(ft_dir.glob("fasttext_pybind*.so"))
+            # setup.py copies the .so into python/fasttext_module/ (inplace)
+            so_files = list((ft_dir / "python" / "fasttext_module").glob("fasttext_pybind*.so"))
             if not so_files:
                 raise RuntimeError("fasttext_pybind.so not found after build — check fasttext setup.py output")
             for so in so_files:
