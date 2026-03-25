@@ -6,9 +6,16 @@ https://fasttext.cc/
 import hashlib
 import logging
 import re
+import sys
 from pathlib import Path
 from urllib.error import ContentTooShortError, HTTPError, URLError
 from urllib.request import urlretrieve
+
+# When installed from a pre-built wheel, fasttext is vendored inside the package.
+# Add the _vendor directory to sys.path so `import fasttext` resolves to the bundled copy.
+_vendor_dir = Path(__file__).parent / "_vendor"
+if _vendor_dir.exists() and str(_vendor_dir) not in sys.path:
+    sys.path.insert(0, str(_vendor_dir))
 
 import fasttext
 from platformdirs import user_cache_dir

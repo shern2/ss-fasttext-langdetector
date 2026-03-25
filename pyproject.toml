@@ -1,12 +1,15 @@
 [project]
 name = "ss-fasttext-langdetector"
-version = "0.0.3"
+version = "0.0.4"
 description = "FastText Language Detector"
 requires-python = ">=3.12,<3.13"
 authors = [{ name = "shern" }]
 keywords = ["fasttext", "language", "detector"]
 dependencies = [
-    "fasttext==0.9.3",
+    # fasttext is NOT a runtime dependency — it is compiled from source and bundled
+    # inside the wheel by hatch_build.py (see _vendor/ at build time).
+    # On non-Linux platforms (macOS dev) where no pre-built wheel exists,
+    # fasttext is still resolved from [tool.uv.sources] below for local dev.
     "platformdirs>=4.3.6",
     "tenacity>=9.1.2",
 ]
@@ -20,8 +23,28 @@ Issues = "https://github.com/shern2/ss-fasttext-langdetector/issues"
 
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "pybind11>=2.6", "numpy", "setuptools", "wheel"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ss_fasttext_langdetector"]
+
+# cibuildwheel config — builds a manylinux_2_28 wheel (glibc 2.28+, compatible with
+# Ubuntu 22.04 / GKE COS nodes) and a macOS arm64 wheel for local dev.
+[tool.cibuildwheel]
+build = ["cp312-*"]
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+manylinux-x86_64-image = "quay.io/pypa/manylinux_2_28_x86_64"
+before-build = "yum install -y git"
+repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel} --plat manylinux_2_28_x86_64"
+
+[tool.cibuildwheel.macos]
+archs = ["arm64"]
 
 [tool.hatch.build]
 sources = ["src"]
@@ -182,6 +205,9 @@ ignore_missing_imports = true
 
 [dependency-groups]
 dev = [
+    # fasttext: provided via git source ([tool.uv.sources]) for local editable installs.
+    # Not a runtime dep — bundled inside the wheel by hatch_build.py at build time.
+    "fasttext",
     # Terminal formatting
     "rich>=14.0.0",
     # Testing
@@ -197,4 +223,8 @@ dev = [
 ]
 
 [tool.uv.sources]
+# Pinned to git source for local dev and macOS builds.
+# For Linux (GKE): after running the `build-fasttext-wheels` GitHub Actions workflow,
+# replace this with the manylinux_2_28 wheel URL from the GitHub Release, e.g.:
+#   fasttext = { url = "https://github.com/shern2/ss-fasttext-langdetector/releases/download/vX.Y.Z/fasttext-0.9.2-cp312-cp312-manylinux_2_28_x86_64.whl", marker = "sys_platform == 'linux'" }
 fasttext = { git = "https://github.com/facebookresearch/fastText", rev = "1142dc4c4ecbc19cc16eee5cdd28472e689267e6" }

@@ -1,0 +1,66 @@
+name: Build and publish wheels
+
+# Builds ss-fasttext-langdetector as a native platform wheel with fasttext bundled inside.
+# Consumers just `uv add ss-fasttext-langdetector` — no source compilation, no glibc issues.
+#
+# Platforms built:
+#   - manylinux_2_28_x86_64 (glibc 2.28+, covers Ubuntu 22.04 / GKE COS)
+#   - macosx_arm64           (M-series Macs)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write  # for uploading release assets
+  id-token: write  # for PyPI trusted publishing
+
+jobs:
+  build-wheels:
+    name: Build wheels
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pypa/cibuildwheel@v2.22
+        env:
+          CIBW_BUILD: "cp312-*"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  publish:
+    name: Publish to PyPI
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    environment:
+      name: pypi
+      url: https://pypi.org/p/ss-fasttext-langdetector
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist/
+
+      - name: List wheels
+        run: ls -la dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Upload wheels to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.whl

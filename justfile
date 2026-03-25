@@ -110,6 +110,30 @@ clean:
 
 
 # ==========================================
+# 🔧 Wheel Building
+# ==========================================
+
+# Build a manylinux_2_28 fasttext wheel locally using Docker (mirrors the CI workflow)
+[group('Wheel Building')]
+build-wheel rev="1142dc4c4ecbc19cc16eee5cdd28472e689267e6":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔧 Building fasttext manylinux_2_28 wheel for rev {{rev}}..."
+    docker run --rm \
+        -e FASTTEXT_REV={{rev}} \
+        quay.io/pypa/manylinux_2_28_x86_64 \
+        bash -c "
+            yum install -y git && \
+            PYTHON=/opt/python/cp312-cp312/bin/python && \
+            \$PYTHON -m pip install --upgrade pip pybind11 numpy setuptools wheel auditwheel && \
+            \$PYTHON -m pip wheel 'fasttext @ git+https://github.com/facebookresearch/fastText@'\"{{rev}}\" --no-deps -w /tmp/raw/ && \
+            \$PYTHON -m auditwheel repair /tmp/raw/fasttext*.whl --plat manylinux_2_28_x86_64 -w /dist/ && \
+            ls -la /dist/
+        " || true
+    echo "ℹ️  To extract the wheel, mount a local volume: add -v \$(pwd)/dist:/dist to the docker run command."
+
+
+# ==========================================
 # 🚀 Publishing
 # ==========================================
 
