@@ -76,10 +76,16 @@ class CustomBuildHook(BuildHookInterface):
     def _compile_and_vendor(self) -> None:
         VENDOR_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Prepare environment variables, forcing the macOS deployment target
+        # Prepare environment variables, aggressively forcing the macOS deployment target
         build_env = os.environ.copy()
         if sys.platform == "darwin":
-            build_env["MACOSX_DEPLOYMENT_TARGET"] = build_env.get("MACOSX_DEPLOYMENT_TARGET", "11.0")
+            target = "11.0"
+            build_env["MACOSX_DEPLOYMENT_TARGET"] = target
+
+            # Force Apple Clang to respect the target via explicit compiler and linker flags
+            for flag_var in ["CFLAGS", "CXXFLAGS", "LDFLAGS"]:
+                existing_flags = build_env.get(flag_var, "")
+                build_env[flag_var] = f"{existing_flags} -mmacosx-version-min={target}".strip()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             ft_dir = Path(tmpdir) / "fastText"
