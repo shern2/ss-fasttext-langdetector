@@ -596,7 +596,7 @@ wheels = [
 
 [[package]]
 name = "ss-fasttext-langdetector"
-version = "0.0.9"
+version = "0.0.10"
 source = { editable = "." }
 dependencies = [
     { name = "platformdirs" },
