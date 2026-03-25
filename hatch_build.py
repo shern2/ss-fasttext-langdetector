@@ -6,10 +6,11 @@ This makes ss-fasttext-langdetector a self-contained native platform wheel —
 consumers get a pre-compiled binary from PyPI with no source compilation needed.
 """
 
+import os
+import platform
 import shutil
 import subprocess
 import sys
-import sysconfig
 import tempfile
 from pathlib import Path
 
@@ -53,7 +54,15 @@ class CustomBuildHook(BuildHookInterface):
         # auditwheel repair will re-tag the Linux wheel to manylinux_2_28_x86_64.
         build_data["pure_python"] = False
         python_ver = f"cp{sys.version_info.major}{sys.version_info.minor}"
-        plat = sysconfig.get_platform().replace("-", "_").replace(".", "_")
+        if sys.platform == "darwin":
+            # Use MACOSX_DEPLOYMENT_TARGET (set by cibuildwheel or default 11.0)
+            # so the wheel tag matches the binary's actual minimum target.
+            deploy = os.environ.get("MACOSX_DEPLOYMENT_TARGET", "11.0").replace(".", "_")
+            arch = platform.machine()  # arm64 or x86_64
+            plat = f"macosx_{deploy}_{arch}"
+        else:
+            import sysconfig
+            plat = sysconfig.get_platform().replace("-", "_").replace(".", "_")
         build_data["tag"] = f"{python_ver}-{python_ver}-{plat}"
 
     def _compile_and_vendor(self) -> None:
@@ -76,10 +85,17 @@ class CustomBuildHook(BuildHookInterface):
             )
 
             self.app.display_info("[build hook] Compiling fasttext_pybind...")
+            compile_env = os.environ.copy()
+            if sys.platform == "darwin":
+                # Ensure the compiled .so targets the deployment version we tag the wheel with.
+                # Without this, clang defaults to the host macOS version (e.g. 15.7) and
+                # delocate-wheel rejects the wheel because the binary/tag versions diverge.
+                compile_env.setdefault("MACOSX_DEPLOYMENT_TARGET", "11.0")
             subprocess.run(
                 [sys.executable, "setup.py", "build_ext", "--inplace"],
                 check=True,
                 cwd=ft_dir,
+                env=compile_env,
             )
 
             # Vendor the fasttext Python wrapper sources
