@@ -76,6 +76,11 @@ class CustomBuildHook(BuildHookInterface):
     def _compile_and_vendor(self) -> None:
         VENDOR_DIR.mkdir(parents=True, exist_ok=True)
 
+        # Prepare environment variables, forcing the macOS deployment target
+        build_env = os.environ.copy()
+        if sys.platform == "darwin":
+            build_env["MACOSX_DEPLOYMENT_TARGET"] = build_env.get("MACOSX_DEPLOYMENT_TARGET", "11.0")
+
         with tempfile.TemporaryDirectory() as tmpdir:
             ft_dir = Path(tmpdir) / "fastText"
 
@@ -97,6 +102,7 @@ class CustomBuildHook(BuildHookInterface):
                 [sys.executable, "setup.py", "build_ext", "--inplace"],
                 check=True,
                 cwd=ft_dir,
+                env=build_env,  # Pass the modified environment here
             )
 
             # Vendor the fasttext Python wrapper sources

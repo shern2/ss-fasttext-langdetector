@@ -47,6 +47,7 @@ repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel} --plat manylinux
 
 [tool.cibuildwheel.macos]
 archs = ["arm64"]
+environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
 
 [tool.hatch.build]
 sources = ["src"]

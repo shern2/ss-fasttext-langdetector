@@ -183,6 +183,24 @@ bump bump="patch" verify="true":
     git push origin "v$NEW_VERSION"
     git push origin $(git branch --show-current)
 
+# Copy the project to a temporary directory for analysis or sharing (e.g. Gemini Gem), excluding artifacts
+[group('Utils')]
+rsync-for-gemini-gem dest="/tmp/ss-fasttext-langdetector/":
+    @mkdir -p {{dest}}
+    rsync -avz --progress \
+        --exclude='/dist/' \
+        --exclude='/htmlcov/' \
+        --exclude='__pycache__/' \
+        --exclude='*.pyc' \
+        --exclude='.venv/' \
+        --exclude='.env' \
+        --exclude='*.env' \
+        --exclude='.git/' \
+        --exclude='.pytest_cache/' \
+        --exclude='.ipynb_checkpoints/' \
+        ./ {{dest}}
+    @echo "Project copied to {{dest}}"
+
 
 # ==========================================
 # 🔒 Internal Helpers
