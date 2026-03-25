@@ -9,6 +9,7 @@ consumers get a pre-compiled binary from PyPI with no source compilation needed.
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tempfile
 from pathlib import Path
 
@@ -46,8 +47,14 @@ class CustomBuildHook(BuildHookInterface):
                 )
                 build_data["force_include"][str(path)] = wheel_path
 
-        # Mark as platform-specific so hatchling doesn't emit a py3-none-any tag
+        # Set explicit platform wheel tag — pure_python=False alone is unreliable
+        # because hatchling may compute the tag during the metadata phase before
+        # our hook fires. Setting 'tag' directly overrides whatever hatchling computed.
+        # auditwheel repair will re-tag the Linux wheel to manylinux_2_28_x86_64.
         build_data["pure_python"] = False
+        python_ver = f"cp{sys.version_info.major}{sys.version_info.minor}"
+        plat = sysconfig.get_platform().replace("-", "_").replace(".", "_")
+        build_data["tag"] = f"{python_ver}-{python_ver}-{plat}"
 
     def _compile_and_vendor(self) -> None:
         VENDOR_DIR.mkdir(parents=True, exist_ok=True)
