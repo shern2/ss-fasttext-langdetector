@@ -47,9 +47,6 @@ repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel} --plat manylinux
 
 [tool.cibuildwheel.macos]
 archs = ["arm64"]
-# Pin deployment target so the compiled .so and wheel tag agree;
-# arm64 Macs start at 11.0 so this is the natural minimum.
-environment = {MACOSX_DEPLOYMENT_TARGET = "11.0"}
 
 [tool.hatch.build]
 sources = ["src"]

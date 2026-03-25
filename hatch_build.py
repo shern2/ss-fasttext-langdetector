@@ -8,9 +8,11 @@ consumers get a pre-compiled binary from PyPI with no source compilation needed.
 
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tempfile
 from pathlib import Path
 
@@ -55,13 +57,19 @@ class CustomBuildHook(BuildHookInterface):
         build_data["pure_python"] = False
         python_ver = f"cp{sys.version_info.major}{sys.version_info.minor}"
         if sys.platform == "darwin":
-            # Use MACOSX_DEPLOYMENT_TARGET (set by cibuildwheel or default 11.0)
-            # so the wheel tag matches the binary's actual minimum target.
-            deploy = os.environ.get("MACOSX_DEPLOYMENT_TARGET", "11.0").replace(".", "_")
-            arch = platform.machine()  # arm64 or x86_64
-            plat = f"macosx_{deploy}_{arch}"
+            # Read the actual minimum macOS target from the compiled .so — the only
+            # reliable source. The MACOSX_DEPLOYMENT_TARGET env var only controls the
+            # wheel tag via sysconfig.get_platform(), but the actual compiler uses the
+            # value baked into Python's sysconfig (which can be higher). Reading from
+            # the binary guarantees the tag and binary stay in sync for delocate-wheel.
+            so_files = list(VENDOR_DIR.glob("fasttext_pybind*.so"))
+            deploy = (
+                self._macos_min_target(so_files[0])
+                if so_files
+                else (sysconfig.get_config_var("MACOSX_DEPLOYMENT_TARGET") or "11.0")
+            )
+            plat = f"macosx_{deploy.replace('.', '_')}_{platform.machine()}"
         else:
-            import sysconfig
             plat = sysconfig.get_platform().replace("-", "_").replace(".", "_")
         build_data["tag"] = f"{python_ver}-{python_ver}-{plat}"
 
@@ -85,17 +93,10 @@ class CustomBuildHook(BuildHookInterface):
             )
 
             self.app.display_info("[build hook] Compiling fasttext_pybind...")
-            compile_env = os.environ.copy()
-            if sys.platform == "darwin":
-                # Ensure the compiled .so targets the deployment version we tag the wheel with.
-                # Without this, clang defaults to the host macOS version (e.g. 15.7) and
-                # delocate-wheel rejects the wheel because the binary/tag versions diverge.
-                compile_env.setdefault("MACOSX_DEPLOYMENT_TARGET", "11.0")
             subprocess.run(
                 [sys.executable, "setup.py", "build_ext", "--inplace"],
                 check=True,
                 cwd=ft_dir,
-                env=compile_env,
             )
 
             # Vendor the fasttext Python wrapper sources
@@ -113,6 +114,29 @@ class CustomBuildHook(BuildHookInterface):
                 shutil.copy2(so, VENDOR_DIR / so.name)
 
         self.app.display_info("[build hook] fasttext vendored successfully.")
+
+    @staticmethod
+    def _macos_min_target(so_path: Path) -> str:
+        """Read the minimum macOS deployment target from a compiled .so via otool.
+
+        Args:
+            so_path: Path to the compiled .so file.
+
+        Returns:
+            Version string like '15.7' or '11.0'.
+        """
+        result = subprocess.run(
+            ["otool", "-l", str(so_path)], capture_output=True, text=True
+        )
+        # LC_BUILD_VERSION (modern): "    minos 15.7.0"
+        m = re.search(r"\bminos\s+(\d+\.\d+)", result.stdout)
+        if m:
+            return m.group(1)
+        # LC_VERSION_MIN_MACOSX (legacy): "  version 11.0"
+        m = re.search(r"LC_VERSION_MIN_MACOSX.*?version\s+(\d+\.\d+)", result.stdout, re.DOTALL)
+        if m:
+            return m.group(1)
+        return sysconfig.get_config_var("MACOSX_DEPLOYMENT_TARGET") or "11.0"
 
     def clean(self, _versions: list[str]) -> None:
         """Remove the vendored fasttext directory."""
