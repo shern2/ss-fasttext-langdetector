@@ -7,6 +7,7 @@ import hashlib
 import logging
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 from urllib.error import ContentTooShortError, HTTPError, URLError
 from urllib.request import urlretrieve
@@ -117,8 +118,25 @@ class LangDetector:
             if not self.rgx_spaces.match(para)
         ]
 
-        langs, _ = self.model.predict(paras)
-        return max(langs, key=langs.count)[0][len("__label__") :]
+        labels, _ = self.model.predict(paras)
+        paragraph_labels = [labels_for_para[0] for labels_for_para in labels]
+        counts = Counter(paragraph_labels)
+        highest_vote_count = max(counts.values())
+        tied_labels = [label for label, count in counts.items() if count == highest_vote_count]
+
+        if len(tied_labels) == 1:
+            return str(tied_labels[0][len("__label__") :])
+
+        all_labels, all_probabilities = self.model.predict(paras, k=len(self.model.get_labels()))
+        mean_probability = {
+            label: sum(
+                dict(zip(labels_for_para, probabilities_for_para, strict=True)).get(label, 0.0)
+                for labels_for_para, probabilities_for_para in zip(all_labels, all_probabilities, strict=True)
+            )
+            / len(paras)
+            for label in tied_labels
+        }
+        return str(max(tied_labels, key=lambda label: mean_probability[label])[len("__label__") :])
 
     def detect(self, texts: list[str]) -> list[str]:
         """
