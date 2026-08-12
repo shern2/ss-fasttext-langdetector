@@ -7,7 +7,9 @@ import hashlib
 import logging
 import re
 import sys
-from collections import Counter
+from collections.abc import Iterator
+from itertools import islice
+from math import log1p
 from pathlib import Path
 from urllib.error import ContentTooShortError, HTTPError, URLError
 from urllib.request import urlretrieve
@@ -35,6 +37,10 @@ MODEL_VERSION = "v0.0.1"
 MODEL_FILENAME = "fasttext_lid.176.bin"
 MODEL_URL = f"https://github.com/shern2/ss-fasttext-langdetector/releases/download/{MODEL_VERSION}/{MODEL_FILENAME}"
 MODEL_SHA256 = "7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e"
+PARAGRAPH_SEPARATOR = re.compile(r"\n+")
+SPACES = re.compile(r"\s+")
+MAX_LENGTH_WEIGHT_CHARS = 20
+SCAN_LIMIT_MULTIPLIER = 10
 
 
 def _verify_file_hash(file_path: Path, expected_hash: str) -> bool:
@@ -44,6 +50,15 @@ def _verify_file_hash(file_path: Path, expected_hash: str) -> bool:
         while chunk := f.read(8192):
             sha256.update(chunk)
     return sha256.hexdigest() == expected_hash
+
+
+def _iter_paragraphs(text: str, separator_pattern: re.Pattern[str] = PARAGRAPH_SEPARATOR) -> Iterator[str]:
+    """Yield newline-separated paragraphs without materializing the full split."""
+    start = 0
+    for separator in separator_pattern.finditer(text):
+        yield text[start : separator.start()]
+        start = separator.end()
+    yield text[start:]
 
 
 @retry(
@@ -67,10 +82,13 @@ class LangDetector:
             pth: Path to the FastText model.
                 If `pth` is None, it will use the default model from the package.
                 If `pth` is a Path object, it will be used as-is;
-            first_n_paras (int): Number of '\n+' separated paragraphs to consider during 'voting' for language detection.
+            first_n_paras (int): Number of language-bearing '\n+' separated paragraphs to consider during voting.
         """
-        self.rgx_split_newline = re.compile(r"\n+")
-        self.rgx_spaces = re.compile(r"\s+")
+        if first_n_paras <= 0:
+            raise ValueError("first_n_paras must be positive")
+        # Kept as instance attributes for compatibility with callers that customize them.
+        self.rgx_split_newline = PARAGRAPH_SEPARATOR
+        self.rgx_spaces = SPACES
         self.first_n_paras = first_n_paras
 
         if pth is not None:
@@ -102,41 +120,41 @@ class LangDetector:
         Returns the corresponding language ISO code.
 
         Note: detects language per paragraph (Paragraphs are split by '\n+') and blank paragraphs are ignored.
-        Takes the top-vote for the language of the first `self.first_n_paras` paragraphs.
+        Votes from the first `self.first_n_paras` paragraphs are weighted by confidence and
+        capped log-scaled character length so tiny fragments have less influence while limiting
+        the leverage of very long paragraphs.
+        Non-alphabetic paragraphs are ignored when language-bearing content is available.
         """
-        paras = [
-            para
-            for para in (
-                self.rgx_split_newline.split(
-                    text.strip(),
-                    maxsplit=self.first_n_paras + 1,  # +1 to avoid n-th para being a huge text chunk
-                )[
-                    # exclude the remaining paragraphs which may contain '\n' that FastText doesn't like
-                    : self.first_n_paras
-                ]
+        paras: list[str] = []
+        fallback_paras: list[str] = []
+        scan_limit = self.first_n_paras * SCAN_LIMIT_MULTIPLIER
+        for raw_para in islice(_iter_paragraphs(text.strip(), self.rgx_split_newline), scan_limit):
+            para = raw_para.strip()
+            if not para or self.rgx_spaces.match(para):
+                continue
+            if len(fallback_paras) < self.first_n_paras:
+                fallback_paras.append(para)
+            if not any(char.isalpha() for char in para):
+                continue
+            paras.append(para)
+            if len(paras) >= self.first_n_paras:
+                break
+
+        if not paras:
+            paras = fallback_paras
+
+        if not paras:
+            paras = [""]
+
+        labels, confidences = self.model.predict(paras, k=1)
+        weighted_votes: dict[str, float] = {}
+        for para, labels_for_para, confidences_for_para in zip(paras, labels, confidences, strict=True):
+            label = labels_for_para[0]
+            weighted_votes[label] = weighted_votes.get(label, 0.0) + float(confidences_for_para[0]) * log1p(
+                min(len(para.strip()), MAX_LENGTH_WEIGHT_CHARS)
             )
-            if not self.rgx_spaces.match(para)
-        ]
 
-        labels, _ = self.model.predict(paras)
-        paragraph_labels = [labels_for_para[0] for labels_for_para in labels]
-        counts = Counter(paragraph_labels)
-        highest_vote_count = max(counts.values())
-        tied_labels = [label for label, count in counts.items() if count == highest_vote_count]
-
-        if len(tied_labels) == 1:
-            return str(tied_labels[0][len("__label__") :])
-
-        all_labels, all_probabilities = self.model.predict(paras, k=len(self.model.get_labels()))
-        mean_probability = {
-            label: sum(
-                dict(zip(labels_for_para, probabilities_for_para, strict=True)).get(label, 0.0)
-                for labels_for_para, probabilities_for_para in zip(all_labels, all_probabilities, strict=True)
-            )
-            / len(paras)
-            for label in tied_labels
-        }
-        return str(max(tied_labels, key=lambda label: mean_probability[label])[len("__label__") :])
+        return str(max(weighted_votes, key=weighted_votes.__getitem__)[len("__label__") :])
 
     def detect(self, texts: list[str]) -> list[str]:
         """
