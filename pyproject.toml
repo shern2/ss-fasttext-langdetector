@@ -8,8 +8,10 @@ keywords = ["fasttext", "language", "detector"]
 dependencies = [
     # fasttext is NOT a runtime dependency — it is compiled from source and bundled
     # inside the wheel by hatch_build.py (see _vendor/ at build time).
+    # Its Python module imports NumPy at runtime, so NumPy remains a direct dependency.
     # On non-Linux platforms (macOS dev) where no pre-built wheel exists,
     # fasttext is still resolved from [tool.uv.sources] below for local dev.
+    "numpy>=2.0,<3",
     "platformdirs>=4.3.6",
     "tenacity>=9.1.2",
 ]

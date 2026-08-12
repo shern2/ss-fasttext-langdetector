@@ -599,6 +599,7 @@ name = "ss-fasttext-langdetector"
 version = "0.1.2"
 source = { editable = "." }
 dependencies = [
+    { name = "numpy" },
     { name = "platformdirs" },
     { name = "tenacity" },
 ]
@@ -618,6 +619,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "numpy", specifier = ">=2.0,<3" },
     { name = "platformdirs", specifier = ">=4.3.6" },
     { name = "tenacity", specifier = ">=9.1.2" },
 ]
