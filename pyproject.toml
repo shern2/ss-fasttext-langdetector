@@ -1,6 +1,6 @@
 [project]
 name = "ss-fasttext-langdetector"
-version = "0.1.1"
+version = "0.1.2"
 description = "FastText Language Detector"
 requires-python = ">=3.12,<3.13"
 authors = [{ name = "shern" }]
